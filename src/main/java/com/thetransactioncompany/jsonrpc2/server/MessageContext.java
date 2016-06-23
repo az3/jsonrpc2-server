@@ -1,13 +1,18 @@
 package com.thetransactioncompany.jsonrpc2.server;
 
 
+import java.net.InetAddress;
+import java.net.URLConnection;
 import java.security.Principal;
 import java.security.cert.X509Certificate;
+
+import javax.net.ssl.HttpsURLConnection;
 import javax.servlet.http.HttpServletRequest;
 
 
 /**
  * Context information about JSON-RPC 2.0 request and notification messages.
+ * This class is immutable.
  *
  * <ul>
  *     <li>The client's host name.
@@ -18,7 +23,6 @@ import javax.servlet.http.HttpServletRequest;
  * </ul>
  *
  * @author Vladimir Dzhuvinov
- * @version 1.5.1 (2012-02-20)
  */
 public class MessageContext {
 
@@ -86,10 +90,9 @@ public class MessageContext {
 		 */
 		public boolean equals(final Object another) {
 		
-			if (another instanceof Principal && ((Principal)another).getName().equals(this.getName()))
-				return true;
-			else
-				return false;
+			return another != null &&
+			       another instanceof Principal && 
+			       ((Principal)another).getName().equals(this.getName());
 		}
 		
 		
@@ -214,6 +217,17 @@ public class MessageContext {
 	
 	
 	/**
+	 * Creates a new JSON-RPC 2.0 request / notification context. Indicates 
+	 * an insecure transport (plain HTTP) and no authenticated client 
+	 * principal. Not client host name / IP is specified.
+	 */
+	public MessageContext() {
+	
+		this.secure = false;
+	}
+	
+	
+	/**
 	 * Creates a new JSON-RPC 2.0 request / notification context from the
 	 * specified HTTP request.
 	 *
@@ -238,6 +252,64 @@ public class MessageContext {
 			
 			for (int i=0; i < principals.length; i++)
 				principals[i] = certs[i].getSubjectX500Principal();
+		}
+	}
+
+
+	/**
+	 * Creates a new JSON-RPC 2.0 request / notification context from the
+	 * specified URL connection. Use this constructor in cases when the 
+	 * HTTP server is the origin of the JSON-RPC 2.0 requests / 
+	 * notifications. If the IP address of the HTTP server cannot be 
+	 * resolved {@link #getClientInetAddress} will return {@code null}.
+	 *
+	 * @param connection The URL connection, must be established and not
+	 *                   {@code null}.
+	 */
+	public MessageContext(final URLConnection connection) {
+
+		clientHostName = connection.getURL().getHost();
+
+		InetAddress ip = null;
+
+		if (clientHostName != null) {
+
+			try {
+				ip = InetAddress.getByName(clientHostName);
+
+			} catch (Exception e) {
+
+				// UnknownHostException, SecurityException 
+				// ignore
+			}
+		}
+
+		if (ip != null)
+			clientInetAddress = ip.getHostAddress();
+
+
+		if (connection instanceof HttpsURLConnection) {
+
+			secure = true;
+
+			HttpsURLConnection httpsConnection = (HttpsURLConnection)connection;
+
+			Principal prn = null;
+
+			try {
+				prn = httpsConnection.getPeerPrincipal();
+
+			} catch (Exception e) {
+
+				// SSLPeerUnverifiedException, IllegalStateException 
+				// ignore
+			}
+
+			if (prn != null) {
+
+				principals = new Principal[1];
+				principals[0] = prn;
+			}
 		}
 	}
 	
@@ -310,7 +382,7 @@ public class MessageContext {
 	 * Returns the first authenticated client principal name, {@code null} 
 	 * if none.
 	 *
-	 * @return The frist client principal name, {@code null} if none.
+	 * @return The first client principal name, {@code null} if none.
 	 */
 	public String getPrincipalName() {
 	
@@ -335,5 +407,22 @@ public class MessageContext {
 			names[i] = principals[i].getName();
 		
 		return names;
+	}
+
+
+	@Override
+	public String toString() {
+
+		String s = "[host=" + clientHostName + " hostIP=" + clientInetAddress + " secure=" + secure;
+
+		if (principals != null) {
+
+			int i = 0;
+
+			for (Principal p: principals)
+				s += " principal[" + (i++) + "]=" + p;
+		}
+
+		return s + "]";
 	}
 }

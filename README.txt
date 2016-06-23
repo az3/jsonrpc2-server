@@ -65,4 +65,9 @@ The JSON-RPC 2.0 specification and user group forum can be found at
 
         http://groups.google.com/group/json-rpc
 
+Compile
+	`mvn clean install -Dmaven.javadoc.failOnError=false`
+	`mvn clean install -Dmaven.javadoc.skip=true`
+
+
 [EOF]
